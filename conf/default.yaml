@@ -1,0 +1,3 @@
+param: "paramです！"
+defaults:
+  - test_param: default
