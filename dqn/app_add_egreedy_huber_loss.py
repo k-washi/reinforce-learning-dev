@@ -1,6 +1,6 @@
 """
-1. 直近4フレームの保持を追加
-
+1. ステップで変更されるε-Greedy方策を導入
+2. Huber Lossに変更
 """
 
 import sys
@@ -12,7 +12,7 @@ import time
 import numpy as np
 
 from collections import deque # スレッドセーフなキュー
-
+import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Activation, Flatten, Conv2D, MaxPooling2D
 from tensorflow.keras.optimizers import Adam
@@ -84,17 +84,18 @@ class GymPackman():
         
         return next_state, reward, done
 
-
-
 class DQN():
-    def __init__(self, state_size, action_size) -> None:
+    def __init__(self, state_size, action_size, max_episode=500) -> None:
         self._state_size = state_size
         self._action_size = action_size
 
         self._replay_buffer = deque(maxlen=5000)
         self.gamma = 0.9
-        self.epsilon = 0.8
         self.update_rate = 1000
+
+        self._max_episode = max_episode
+        self._min_epsilon_rate = 0.1
+
         
         self.main_net = self.build_net()
         self.target_net = self.build_net()
@@ -115,28 +116,31 @@ class DQN():
         model.add(Dense(512, activation='relu'))
         model.add(Dense(self._action_size, activation='linear'))
 
-        model.compile(loss='mse', optimizer=Adam())
+        loss = tf.keras.losses.Huber(delta=1.0)
+        model.compile(loss=loss, optimizer=Adam())
 
         return model
     
     def store_transistion(self, state, action, reward, next_state, done):
         self._replay_buffer.append((state, action, reward, next_state, done))
     
-    def epsilon_greedy(self, state):
-        if random.uniform(0, 1) < self.epsilon:
+
+    def epsilon_greedy(self, state, step):
+        epsilon = max(1 - (1 - self._min_epsilon_rate) * step / self._max_episode, self._min_epsilon_rate)
+        if random.uniform(0, 1) < epsilon:
             return np.random.randint(self._action_size)
-        Q_value = self.main_net.predict(state)
+        Q_value = self.main_net.predict(state) 
         return np.argmax(Q_value[0])
     
     def train(self, batch_size):
         minibatch = random.sample(self._replay_buffer, batch_size)
-        b_Q_values = np.zeros((batch_size, 1, self._action_size))
-        b_state = np.zeros((batch_size, *self._state_size))
+        #b_Q_values = np.zeros((batch_size, 1, self._action_size))
+        #b_state = np.zeros((batch_size, *self._state_size))
     
         states, actions, rewards, next_states, dones = zip(*minibatch)
         states, actions, rewards, next_states, dones = np.vstack(states), np.vstack(actions), np.vstack(rewards), np.vstack(next_states), np.vstack(dones)
         not_dones = np.logical_not(dones).astype(np.int32)
-        print(states.shape, actions.shape, rewards.shape, next_states.shape, dones.shape)
+        # print(states.shape, actions.shape, rewards.shape, next_states.shape, dones.shape)
         # (8, 88, 80, 1) (8, 1) (8, 1) (8, 88, 80, 1) (8, 1)
         
         target_Qs = rewards + not_dones * self.gamma * np.amax(self.target_net.predict(next_states), axis=1) # (8, 1)
@@ -145,7 +149,7 @@ class DQN():
             a = actions[ind][0]
             Q_values[ind][a] = target_Qs[ind][0]
         
-        self.main_net.fit(b_state, b_Q_values, epochs=1, verbose=0) # intput, result
+        self.main_net.fit(states, Q_values, epochs=1, verbose=0) # intput, result
     
     def update_target_net(self):
         self.target_net.set_weights(self.main_net.get_weights())
@@ -164,13 +168,13 @@ def main():
     batch_size = 8
     num_screen = 4
 
-    dqn = DQN(state_size, action_size)
+    dqn = DQN(state_size, action_size, num_epi)
     done = False
 
     rl_summary = RLSummaryWriter()
 
     time_step = 0
-    for i in range(num_epi):
+    for epi in range(num_epi):
         Return = 0
         state = env.reset()
         state = env.preprocess_state(state)
@@ -184,7 +188,7 @@ def main():
                 dqn.update_target_net()
 
             state = env.get_state()
-            a = dqn.epsilon_greedy(state)
+            a = dqn.epsilon_greedy(state, epi)
             
             
 
@@ -197,13 +201,13 @@ def main():
             state = next_state
             Return += reward
             if done:
-                print(f'Episode:{i}, timesteps: {t}, Return: {Return}, time: {time.time() - start_time}')
+                print(f'Episode:{epi}, timesteps: {t}, Return: {Return}, time: {time.time() - start_time}')
                 break
             
             if len(dqn._replay_buffer) > batch_size and t % env._learning_frame_length == 0:
                 dqn.train(batch_size)
         
-        rl_summary.set_frame_id(i)
+        rl_summary.set_frame_id(epi)
         rl_summary.add_return(Return)
             
             
