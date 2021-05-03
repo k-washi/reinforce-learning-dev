@@ -41,7 +41,7 @@ class GymPackman():
     def preprocess_state(self, state):
         image = state[1:176:2, ::2] # 210x160x3 => 88x80x3
         image = image.mean(axis=2) # gray scale
-        #image[image == color] = 0
+        image[image == color] = 0
         image = (image - 128) / 128 - 1
         
         image = image.reshape(self._height, self._width)

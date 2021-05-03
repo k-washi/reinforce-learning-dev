@@ -8,7 +8,8 @@ TIME_FORMAT = "%y-%m-%d-%H-%M-%S"
 
 class RLSummaryWriter():
     def __init__(self) -> None:
-        self._writer = SummaryWriter(log_dir="./logs")
+        os.makedirs("./logs", exist_ok=True)
+        self._writer = SummaryWriter(log_dir=f"./logs/{datetime.now(JST).strftime(TIME_FORMAT)}")
         self._frame_id = 0
     def __delattr__(self, name: str) -> None:
         self._writer.close()
@@ -25,8 +26,9 @@ class RLSummaryWriter():
 class RLModelSaver():
     def __init__(self, model_dir) -> None:
         self._max_reward = -1
+        os.makedirs(model_dir, exist_ok=True)
         self._model_dir = f"{model_dir}/{datetime.now(JST).strftime(TIME_FORMAT)}"
-        os.makedirs(self._model_dir)
+        os.makedirs(self._model_dir, exist_ok=True)
 
     def reward_save(self, model, epi, reward):
         if reward > self._max_reward:
