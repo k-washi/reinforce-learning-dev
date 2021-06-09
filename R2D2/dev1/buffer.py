@@ -85,7 +85,7 @@ class SegmentReplayBuffer:
         for idx, priority in zip(sampled_indices, priorities):
             self.priorities[idx] = priority
     
-    def sample_minbatch(self, batch_size):
+    def sample_minibatch(self, batch_size):
         sampled_indices = [self.priorities.sample() for _ in range(batch_size)]
 
         # Compute importance sampling weigths
