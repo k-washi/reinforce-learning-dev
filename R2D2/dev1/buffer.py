@@ -92,6 +92,7 @@ class SegmentReplayBuffer:
         weights = []
         current_size = len(self.segment_buffer) if self.full else self.count
         for idx in sampled_indices:
+            # Prioritized experience replayの補正重みを計算
             prob = self.priorities[idx] / self.priorities.sum()
             weight = (prob * current_size) ** (-self.beta)
             weights.append(weight)
@@ -99,4 +100,3 @@ class SegmentReplayBuffer:
 
         sampled_segments = [self.segment_buffer[idx] for idx in sampled_indices]
         return sampled_indices, weights, sampled_segments
-        
